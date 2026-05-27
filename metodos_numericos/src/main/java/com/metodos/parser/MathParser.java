@@ -27,6 +27,8 @@ public class MathParser {
         String sanitized = expr.toLowerCase().trim();
         // Replace common spanish names/aliases if any (like sen -> sin)
         sanitized = sanitized.replaceAll("\\bsen\\b", "sin");
+        // Replace 'log' with 'log10' (as base-10 log is standard for user inputting 'log')
+        sanitized = sanitized.replaceAll("\\blog\\b", "log10");
         // Replace 'ln' with 'log' as exp4j uses 'log' for natural logarithm
         sanitized = sanitized.replaceAll("\\bln\\b", "log");
         return sanitized;

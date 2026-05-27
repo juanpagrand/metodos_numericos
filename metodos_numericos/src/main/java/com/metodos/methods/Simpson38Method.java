@@ -38,45 +38,87 @@ public class Simpson38Method implements IntegrationMethod {
             yValues[i] = parser.evaluate(xValues[i]);
         }
 
-        // Apply Simpson's 3/8 Rule
-        double sumMult3 = 0;
-        double sumOthers = 0;
-
-        for (int i = 1; i < n; i++) {
-            if (i % 3 == 0) {
-                sumMult3 += yValues[i];
+        // Apply Simpson's 3/8 Rule and gather terms
+        double sumTerms = 0;
+        double[] terms = new double[n + 1];
+        int[] weights = new int[n + 1];
+        for (int i = 0; i <= n; i++) {
+            int w;
+            if (i == 0 || i == n) {
+                w = 1;
+            } else if (i % 3 == 0) {
+                w = 2;
             } else {
-                sumOthers += yValues[i];
+                w = 3;
             }
+            weights[i] = w;
+            terms[i] = w * yValues[i];
+            sumTerms += terms[i];
         }
 
-        double result = (3.0 * h / 8.0) * (yValues[0] + 3.0 * sumOthers + 2.0 * sumMult3 + yValues[n]);
+        double result = (3.0 * h / 8.0) * sumTerms;
 
         // Generate steps
         List<String> steps = new ArrayList<>();
         steps.add("--- MÉTODO DE SIMPSON 3/8 COMPUESTO ---");
         steps.add(String.format(Locale.US, "1. Calcular el tamaño de paso (h):\n   h = (b - a) / n = (%.6f - %.6f) / %d = %.8f", b, a, n, h));
         
-        steps.add("\n2. Tabulación de puntos evaluados:");
-        for (int i = 0; i <= n; i++) {
-            String role;
-            if (i == 0) role = "Límite inferior (a)";
-            else if (i == n) role = "Límite superior (b)";
-            else if (i % 3 == 0) role = "Múltiplo de 3 (peso 2)";
-            else role = "Otros puntos (peso 3)";
-            
-            steps.add(String.format(Locale.US, "   x_%d = %.6f   ->   f(x_%d) = %.8f   [%s]", i, xValues[i], i, yValues[i], role));
-        }
-
-        steps.add("\n3. Aplicar la fórmula:");
-        steps.add("   Integral ≈ (3h / 8) * [ f(x_0) + 3 * Σ(f(x_no_multiplos_de_3)) + 2 * Σ(f(x_multiplos_de_3)) + f(x_n) ]");
-        steps.add(String.format(Locale.US, "   Suma de puntos intermedios (peso 3) = %.8f", sumOthers));
-        steps.add(String.format(Locale.US, "   Suma de múltiplos de 3 (peso 2) = %.8f", sumMult3));
-        steps.add(String.format(Locale.US, "   Integral ≈ (3 * %.8f / 8) * [ %.8f + 3 * (%.8f) + 2 * (%.8f) + %.8f ]", 
-                h, yValues[0], sumOthers, sumMult3, yValues[n]));
+        steps.add("\n2. Tabulación de puntos evaluados y cálculo de términos:");
+        steps.add(String.format(Locale.US, "   %-9s | %-12s | %-12s | %-10s | %s", "Punto (i)", "x_i", "f(x_i)", "Peso (w_i)", "Término (w_i * f(x_i))"));
+        steps.add("   --------------------------------------------------------------------------------------------------------");
         
-        steps.add(String.format(Locale.US, "\n4. Resultado final:\n   Integral ≈ %.10f", result));
+        for (int i = 0; i <= n; i++) {
+            String exprWithVal = parser.getExpressionString().replaceAll("\\bx\\b", formatDouble(xValues[i]));
+            String termExpression = String.format(Locale.US, "%d * %s = %.8f", weights[i], exprWithVal, terms[i]);
+            steps.add(String.format(Locale.US, "   i = %-5d | %-12s | %-12.8f | %-10d | %s", 
+                    i, formatDouble(xValues[i]), yValues[i], weights[i], termExpression));
+        }
+        steps.add("   --------------------------------------------------------------------------------------------------------");
+
+        steps.add("\n3. Suma total de los términos (corchete):");
+        StringBuilder sumExpression = new StringBuilder();
+        for (int i = 0; i <= n; i++) {
+            sumExpression.append(String.format(Locale.US, "%.8f", terms[i]));
+            if (i < n) {
+                sumExpression.append(" + ");
+            }
+        }
+        steps.add(String.format(Locale.US, "   Suma = %s", sumExpression.toString()));
+        steps.add(String.format(Locale.US, "   Suma = %.8f", sumTerms));
+
+        steps.add("\n4. Aplicar la fórmula final:");
+        steps.add("   Integral ≈ (3h / 8) * Suma");
+        steps.add(String.format(Locale.US, "   Integral ≈ (3 * %.8f / 8) * %.8f", h, sumTerms));
+        steps.add(String.format(Locale.US, "   Integral ≈ %.8f * %.8f", (3.0 * h / 8.0), sumTerms));
+        steps.add(String.format(Locale.US, "   Integral ≈ %.10f", result));
+
+        steps.add("\n5. Tabulación de puntos evaluados (sin pesos):");
+        steps.add(String.format(Locale.US, "   %-9s | %-12s | %s", "Punto (i)", "x_i", "f(x_i)"));
+        steps.add("   -------------------------------------------------");
+        for (int i = 0; i <= n; i++) {
+            steps.add(String.format(Locale.US, "   i = %-5d | %-12s | %.8f", 
+                    i, formatDouble(xValues[i]), yValues[i]));
+        }
+        steps.add("   -------------------------------------------------");
+
+        steps.add("\n6. Gráfica de los puntos evaluados (eje X = x_i, eje Y = f(x_i)):");
+        steps.add(generateASCIIPlot(xValues, yValues));
 
         return new IntegrationResult(result, h, xValues, yValues, steps);
+    }
+
+    private String formatDouble(double val) {
+        if (val == (long) val) {
+            return String.format(Locale.US, "%d", (long) val);
+        } else {
+            String s = String.format(Locale.US, "%.6f", val);
+            while (s.endsWith("0") && s.contains(".")) {
+                s = s.substring(0, s.length() - 1);
+            }
+            if (s.endsWith(".")) {
+                s = s.substring(0, s.length() - 1);
+            }
+            return s;
+        }
     }
 }

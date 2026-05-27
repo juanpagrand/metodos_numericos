@@ -38,50 +38,89 @@ public class BooleMethod implements IntegrationMethod {
             yValues[i] = parser.evaluate(xValues[i]);
         }
 
-        // Apply Boole's Composite Rule
-        double sumOdd = 0;      // weight 32 (indices: 1, 3, 5, 7...)
-        double sumEvenNot4 = 0; // weight 12 (indices: 2, 6, 10...)
-        double sumMult4 = 0;    // weight 14 (indices: 4, 8, 12...)
-
-        for (int i = 1; i < n; i++) {
-            if (i % 4 == 0) {
-                sumMult4 += yValues[i];
+        // Apply Boole's Composite Rule and gather terms
+        double sumTerms = 0;
+        double[] terms = new double[n + 1];
+        int[] weights = new int[n + 1];
+        for (int i = 0; i <= n; i++) {
+            int w;
+            if (i == 0 || i == n) {
+                w = 7;
+            } else if (i % 4 == 0) {
+                w = 14;
             } else if (i % 2 == 0) {
-                sumEvenNot4 += yValues[i];
+                w = 12;
             } else {
-                sumOdd += yValues[i];
+                w = 32;
             }
+            weights[i] = w;
+            terms[i] = w * yValues[i];
+            sumTerms += terms[i];
         }
 
-        double result = (2.0 * h / 45.0) * (7.0 * yValues[0] + 32.0 * sumOdd + 12.0 * sumEvenNot4 + 14.0 * sumMult4 + 7.0 * yValues[n]);
+        double result = (2.0 * h / 45.0) * sumTerms;
 
         // Generate steps
         List<String> steps = new ArrayList<>();
         steps.add("--- MÉTODO DE BOOLE COMPUESTO ---");
         steps.add(String.format(Locale.US, "1. Calcular el tamaño de paso (h):\n   h = (b - a) / n = (%.6f - %.6f) / %d = %.8f", b, a, n, h));
         
-        steps.add("\n2. Tabulación de puntos evaluados:");
-        for (int i = 0; i <= n; i++) {
-            String role;
-            if (i == 0) role = "Límite inferior (a) [peso 7]";
-            else if (i == n) role = "Límite superior (b) [peso 7]";
-            else if (i % 4 == 0) role = "Múltiplo de 4 [peso 14]";
-            else if (i % 2 == 0) role = "Par no múltiplo de 4 [peso 12]";
-            else role = "Punto impar [peso 32]";
-            
-            steps.add(String.format(Locale.US, "   x_%d = %.6f   ->   f(x_%d) = %.8f   [%s]", i, xValues[i], i, yValues[i], role));
-        }
-
-        steps.add("\n3. Aplicar la fórmula:");
-        steps.add("   Integral ≈ (2h / 45) * [ 7*f(x_0) + 32*Σ(f(x_impares)) + 12*Σ(f(x_pares_no_mult_4)) + 14*Σ(f(x_mult_4)) + 7*f(x_n) ]");
-        steps.add(String.format(Locale.US, "   Suma de puntos impares (peso 32) = %.8f", sumOdd));
-        steps.add(String.format(Locale.US, "   Suma de pares no mult 4 (peso 12) = %.8f", sumEvenNot4));
-        steps.add(String.format(Locale.US, "   Suma de múltiplos de 4 (peso 14) = %.8f", sumMult4));
-        steps.add(String.format(Locale.US, "   Integral ≈ (2 * %.8f / 45) * [ 7*(%.8f) + 32*(%.8f) + 12*(%.8f) + 14*(%.8f) + 7*(%.8f) ]", 
-                h, yValues[0], sumOdd, sumEvenNot4, sumMult4, yValues[n]));
+        steps.add("\n2. Tabulación de puntos evaluados y cálculo de términos:");
+        steps.add(String.format(Locale.US, "   %-9s | %-12s | %-12s | %-10s | %s", "Punto (i)", "x_i", "f(x_i)", "Peso (w_i)", "Término (w_i * f(x_i))"));
+        steps.add("   --------------------------------------------------------------------------------------------------------");
         
-        steps.add(String.format(Locale.US, "\n4. Resultado final:\n   Integral ≈ %.10f", result));
+        for (int i = 0; i <= n; i++) {
+            String exprWithVal = parser.getExpressionString().replaceAll("\\bx\\b", formatDouble(xValues[i]));
+            String termExpression = String.format(Locale.US, "%d * %s = %.8f", weights[i], exprWithVal, terms[i]);
+            steps.add(String.format(Locale.US, "   i = %-5d | %-12s | %-12.8f | %-10d | %s", 
+                    i, formatDouble(xValues[i]), yValues[i], weights[i], termExpression));
+        }
+        steps.add("   --------------------------------------------------------------------------------------------------------");
+
+        steps.add("\n3. Suma total de los términos (corchete):");
+        StringBuilder sumExpression = new StringBuilder();
+        for (int i = 0; i <= n; i++) {
+            sumExpression.append(String.format(Locale.US, "%.8f", terms[i]));
+            if (i < n) {
+                sumExpression.append(" + ");
+            }
+        }
+        steps.add(String.format(Locale.US, "   Suma = %s", sumExpression.toString()));
+        steps.add(String.format(Locale.US, "   Suma = %.8f", sumTerms));
+
+        steps.add("\n4. Aplicar la fórmula final:");
+        steps.add("   Integral ≈ (2h / 45) * Suma");
+        steps.add(String.format(Locale.US, "   Integral ≈ (2 * %.8f / 45) * %.8f", h, sumTerms));
+        steps.add(String.format(Locale.US, "   Integral ≈ %.8f * %.8f", (2.0 * h / 45.0), sumTerms));
+        steps.add(String.format(Locale.US, "   Integral ≈ %.10f", result));
+
+        steps.add("\n5. Tabulación de puntos evaluados (sin pesos):");
+        steps.add(String.format(Locale.US, "   %-9s | %-12s | %s", "Punto (i)", "x_i", "f(x_i)"));
+        steps.add("   -------------------------------------------------");
+        for (int i = 0; i <= n; i++) {
+            steps.add(String.format(Locale.US, "   i = %-5d | %-12s | %.8f", 
+                    i, formatDouble(xValues[i]), yValues[i]));
+        }
+        steps.add("   -------------------------------------------------");
+
+        steps.add("\n6. Gráfica de los puntos evaluados (eje X = x_i, eje Y = f(x_i)):");
+        steps.add(generateASCIIPlot(xValues, yValues));
 
         return new IntegrationResult(result, h, xValues, yValues, steps);
+    }
+
+    private String formatDouble(double val) {
+        if (val == (long) val) {
+            return String.format(Locale.US, "%d", (long) val);
+        } else {
+            String s = String.format(Locale.US, "%.6f", val);
+            while (s.endsWith("0") && s.contains(".")) {
+                s = s.substring(0, s.length() - 1);
+            }
+            if (s.endsWith(".")) {
+                s = s.substring(0, s.length() - 1);
+            }
+            return s;
+        }
     }
 }

@@ -109,4 +109,11 @@ public class IntegrationMethodsTest {
         assertEquals(Math.log(2.0), parser.evaluate(2.0), 1e-9);
         assertEquals(Math.log(10.0), parser.evaluate(10.0), 1e-9);
     }
+
+    @Test
+    public void testMathParserWithLog() {
+        MathParser parser = new MathParser("log(x)");
+        assertEquals(Math.log10(2.0), parser.evaluate(2.0), 1e-9);
+        assertEquals(Math.log10(10.0), parser.evaluate(10.0), 1e-9);
+    }
 }
