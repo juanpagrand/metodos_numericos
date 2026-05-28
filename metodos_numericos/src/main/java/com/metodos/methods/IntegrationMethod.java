@@ -1,6 +1,7 @@
 package com.metodos.methods;
 
 import com.metodos.parser.MathParser;
+import java.util.function.DoubleUnaryOperator;
 
 /**
  * Common interface for all numerical integration methods.
@@ -33,14 +34,25 @@ public interface IntegrationMethod {
      * Generates a text-based ASCII plot representing y values vs x values.
      */
     default String generateASCIIPlot(double[] x, double[] y) {
-        int rows = 12;
-        int cols = 60;
-        char[][] grid = new char[rows][cols];
-        for (int r = 0; r < rows; r++) {
-            for (int c = 0; c < cols; c++) {
-                grid[r][c] = ' ';
-            }
+        return generateASCIIPlot(null, 0.0, 1.0, x, y, 60, 12);
+    }
+
+    /**
+     * Generates a text-based ASCII plot with custom width/height.
+     */
+    default String generateASCIIPlot(DoubleUnaryOperator func, double a, double b, double[] x, double[] y) {
+        return generateASCIIPlot(func, a, b, x, y, 60, 12);
+    }
+
+    /**
+     * Generates a text-based ASCII plot with custom width/height and optional background curve.
+     */
+    default String generateASCIIPlot(DoubleUnaryOperator func, double a, double b, double[] x, double[] y, int cols, int rows) {
+        if (x == null || y == null || x.length == 0 || y.length == 0 || x.length != y.length) {
+            return "(sin datos para graficar)";
         }
+        int innerCols = Math.max(cols, 10);
+        int innerRows = Math.max(rows, 6);
 
         double minX = Double.MAX_VALUE;
         double maxX = -Double.MAX_VALUE;
@@ -56,124 +68,123 @@ public interface IntegrationMethod {
             if (val > maxY) maxY = val;
         }
 
+        double[] curveSamples = null;
+        if (func != null) {
+            minX = a;
+            maxX = b;
+            int sampleCount = innerCols;
+            curveSamples = new double[sampleCount];
+            for (int i = 0; i < sampleCount; i++) {
+                double t = (sampleCount == 1) ? 0.0 : (double) i / (sampleCount - 1);
+                double xi = a + (b - a) * t;
+                double yi;
+                try {
+                    yi = func.applyAsDouble(xi);
+                } catch (Exception ex) {
+                    yi = Double.NaN;
+                }
+                curveSamples[i] = yi;
+            }
+        }
+
         double diffX = maxX - minX;
         double diffY = maxY - minY;
-
         if (diffX == 0) diffX = 1.0;
         if (diffY == 0) diffY = 1.0;
 
-        // Draw axes if they fall within bounds
-        int zeroRow = -1;
-        if (minY <= 0 && maxY >= 0) {
-            zeroRow = (int) Math.round((maxY - 0) / diffY * (rows - 1));
-            if (zeroRow >= 0 && zeroRow < rows) {
-                for (int c = 0; c < cols; c++) {
-                    grid[zeroRow][c] = '-';
+        int totalCols = innerCols + 2;
+        int totalRows = innerRows + 2;
+        char[][] canvas = new char[totalRows][totalCols];
+        for (int r = 0; r < totalRows; r++) {
+            for (int c = 0; c < totalCols; c++) {
+                canvas[r][c] = ' ';
+            }
+        }
+
+        canvas[0][0] = '+';
+        canvas[0][totalCols - 1] = '+';
+        canvas[totalRows - 1][0] = '+';
+        canvas[totalRows - 1][totalCols - 1] = '+';
+        for (int c = 1; c < totalCols - 1; c++) {
+            canvas[0][c] = '-';
+            canvas[totalRows - 1][c] = '-';
+        }
+        for (int r = 1; r < totalRows - 1; r++) {
+            canvas[r][0] = '|';
+            canvas[r][totalCols - 1] = '|';
+        }
+
+        if (curveSamples != null) {
+            for (int i = 0; i < curveSamples.length; i++) {
+                double yi = curveSamples[i];
+                if (Double.isNaN(yi) || Double.isInfinite(yi)) {
+                    continue;
+                }
+                int col = i;
+                int row = (int) Math.round(((maxY - yi) / diffY) * (innerRows - 1));
+
+                if (row < 0 || row >= innerRows) {
+                    continue;
+                }
+                if (col < 0 || col >= innerCols) {
+                    continue;
+                }
+
+                int plotCol = col + 1;
+                int plotRow = row + 1;
+                if (canvas[plotRow][plotCol] == ' ') {
+                    canvas[plotRow][plotCol] = '.';
                 }
             }
         }
 
-        int zeroCol = -1;
-        if (minX <= 0 && maxX >= 0) {
-            zeroCol = (int) Math.round((0 - minX) / diffX * (cols - 1));
-            if (zeroCol >= 0 && zeroCol < cols) {
-                for (int r = 0; r < rows; r++) {
-                    grid[r][zeroCol] = '|';
-                }
-            }
-        }
-
-        if (zeroRow != -1 && zeroCol != -1) {
-            grid[zeroRow][zeroCol] = '+';
-        }
-
-        // Draw vertical drop lines from each point down to the bottom of the grid
         for (int i = 0; i < x.length; i++) {
-            int c = (int) Math.round((x[i] - minX) / diffX * (cols - 1));
-            int r = (int) Math.round((maxY - y[i]) / diffY * (rows - 1));
-
-            if (c < 0) c = 0;
-            if (c >= cols) c = cols - 1;
-            if (r < 0) r = 0;
-            if (r >= rows) r = rows - 1;
-
-            for (int row = r + 1; row < rows; row++) {
-                grid[row][c] = '|';
+            if (Double.isNaN(x[i]) || Double.isInfinite(x[i]) || Double.isNaN(y[i]) || Double.isInfinite(y[i])) {
+                continue;
             }
-        }
+            int col = (int) Math.round(((x[i] - minX) / diffX) * (innerCols - 1));
+            int row = (int) Math.round(((maxY - y[i]) / diffY) * (innerRows - 1));
 
-        // Plot points and coordinates
-        for (int i = 0; i < x.length; i++) {
-            int c = (int) Math.round((x[i] - minX) / diffX * (cols - 1));
-            int r = (int) Math.round((maxY - y[i]) / diffY * (rows - 1));
+            if (col < 0) col = 0;
+            if (col >= innerCols) col = innerCols - 1;
+            if (row < 0) row = 0;
+            if (row >= innerRows) row = innerRows - 1;
 
-            if (c < 0) c = 0;
-            if (c >= cols) c = cols - 1;
-            if (r < 0) r = 0;
-            if (r >= rows) r = rows - 1;
+            int plotCol = col + 1;
+            int plotRow = row + 1;
+            canvas[plotRow][plotCol] = '*';
 
-            // Generate label
             String label = String.format(java.util.Locale.US, "(%s, %.2f)", formatDoubleForPlot(x[i]), y[i]);
+            int rightStart = plotCol + 1;
+            int leftStart = plotCol - label.length() - 1;
 
-            // Check if label fits to the left of the *
-            if (c >= label.length() + 1) {
-                String labelWithStar = label + " *";
-                int startCol = c - labelWithStar.length() + 1;
-                for (int k = 0; k < labelWithStar.length(); k++) {
-                    int targetCol = startCol + k;
-                    if (targetCol >= 0 && targetCol < cols) {
-                        grid[r][targetCol] = labelWithStar.charAt(k);
-                    }
+            if (rightStart + label.length() <= totalCols - 1) {
+                for (int k = 0; k < label.length(); k++) {
+                    canvas[plotRow][rightStart + k] = label.charAt(k);
                 }
-            } else {
-                String starWithLabel = "* " + label;
-                for (int k = 0; k < starWithLabel.length(); k++) {
-                    int targetCol = c + k;
-                    if (targetCol >= 0 && targetCol < cols) {
-                        grid[r][targetCol] = starWithLabel.charAt(k);
-                    }
+            } else if (leftStart >= 1) {
+                for (int k = 0; k < label.length(); k++) {
+                    canvas[plotRow][leftStart + k] = label.charAt(k);
                 }
             }
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format(java.util.Locale.US, "   y-máx: %.4f\n", maxY));
-        
-        // Top border
-        sb.append("     +");
-        for (int c = 0; c < cols; c++) {
-            sb.append("-");
-        }
-        sb.append("+\n");
-
-        // Rows
-        for (int r = 0; r < rows; r++) {
-            sb.append("     | ");
-            for (int c = 0; c < cols; c++) {
-                sb.append(grid[r][c]);
+        sb.append(String.format(java.util.Locale.US, "y-max: %.4f\n", maxY));
+        for (int r = 0; r < totalRows; r++) {
+            for (int c = 0; c < totalCols; c++) {
+                sb.append(canvas[r][c]);
             }
-            sb.append(" |\n");
+            sb.append("\n");
         }
+        sb.append(String.format(java.util.Locale.US, "y-min: %.4f\n", minY));
 
-        // Bottom border
-        sb.append("     +");
-        for (int c = 0; c < cols; c++) {
-            sb.append("-");
-        }
-        sb.append("+\n");
-
-        sb.append(String.format(java.util.Locale.US, "   y-mín: %.4f\n", minY));
-        
-        // Print x-axis limits aligned to columns
-        sb.append("       ");
         String minXStr = String.format(java.util.Locale.US, "%.2f", minX);
         String maxXStr = String.format(java.util.Locale.US, "%.2f", maxX);
         sb.append(minXStr);
-        int spaces = cols - minXStr.length() - maxXStr.length() - 2;
-        if (spaces > 0) {
-            for (int i = 0; i < spaces; i++) {
-                sb.append(" ");
-            }
+        int spaces = totalCols - minXStr.length() - maxXStr.length();
+        for (int i = 0; i < Math.max(spaces, 1); i++) {
+            sb.append(" ");
         }
         sb.append(maxXStr);
         sb.append("\n");
