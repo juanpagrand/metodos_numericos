@@ -93,7 +93,7 @@ public class TrapezoidalMethod implements IntegrationMethod {
         steps.add("   -------------------------------------------------");
 
         steps.add("\n6. Gráfica de los puntos evaluados (eje X = x_i, eje Y = f(x_i)):");
-        steps.add(generateASCIIPlot(xValues, yValues));
+        steps.add(generateASCIIPlot(parser::evaluate, a, b, xValues, yValues));
 
         return new IntegrationResult(result, h, xValues, yValues, steps);
     }
